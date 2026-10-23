@@ -99,10 +99,36 @@
     return key;
   }
 
+  // Same rules as statusOf() in build.mjs
+  function liveStatuses() {
+    const el = document.getElementById('rv-cfg');
+    const cfg = el ? JSON.parse(el.textContent) : {};
+    if (!cfg.relay) return;
+    fetch(cfg.relay + '?secret=' + encodeURIComponent(cfg.secret)).then(r => r.json()).then(j => {
+      if (!j.ok) return;
+      let ok = 0, open = 0;
+      document.querySelectorAll('.card[data-page]').forEach(card => {
+        const s = j.statuses[card.dataset.page];
+        let cls = 'none', text = 'Not reviewed yet';
+        if (s && s.total) {
+          if (s.open) { cls = 'open'; text = s.open + ' open comment' + (s.open > 1 ? 's' : '') + (s.approved ? ' · approved' : ''); }
+          else if (s.approved) { cls = 'ok'; text = 'Approved'; }
+          else { cls = 'done'; text = 'All comments done'; }
+          open += s.open; if (cls === 'ok') ok++;
+        }
+        const st = card.querySelector('.st');
+        st.className = 'st ' + cls; st.innerHTML = '<i></i>' + text;
+      });
+      $('n-ok').textContent = ok; $('n-open').textContent = open;
+      $('synced').textContent = 'Statuses are live from Notion.';
+    }).catch(() => {});
+  }
+
   async function start(key) {
     if (MODE === 'index') {
       $('list').innerHTML = new TextDecoder().decode(await open(key, await fetchBin('list.bin')));
       $('box').classList.add('wide'); $('h').hidden = true; document.body.classList.add('index');
+      liveStatuses();
       show('list');
       return;
     }

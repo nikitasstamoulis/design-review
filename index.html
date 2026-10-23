@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
 <title>Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root { --bg: #f6f5f2; --card: #fff; --ink: #252525; --muted: #6b6b6b; --line: #e4e2dc; --accent: #252525; }
   * { box-sizing: border-box; }
@@ -25,12 +27,33 @@
   li a:hover { border-color: var(--ink); }
   .t { display: block; font-weight: 600; }
   .m { display: block; font-size: 13px; color: var(--muted); }
-  #list h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 26px 0 10px; }
-  #list p a { color: inherit; }
-  .empty { margin: 0; font-size: 14px; }
-  .st { display: flex; align-items: center; gap: 6px; font-size: 13px; margin: 2px 0; }
-  .st i { width: 8px; height: 8px; border-radius: 50%; background: #b5b2aa; }
-  .st.ok i { background: #2e9d5b; } .st.open i { background: #e8604c; } .st.done i { background: #3b6fd8; }
+  /* Index, shown after unlocking */
+  body.index { display: block; padding: 0; background: radial-gradient(1200px 500px at 15% -10%, #fde3dc 0, transparent 60%), radial-gradient(900px 500px at 95% 0, #dfe7fb 0, transparent 55%), var(--bg); }
+  .box.wide { max-width: 1160px; margin: 0 auto; background: transparent; border: 0; padding: 56px 24px 72px; }
+  .hero { margin-bottom: 36px; }
+  .eyebrow { font: 600 13px/1 Inter, sans-serif; letter-spacing: .12em; text-transform: uppercase; color: #e8604c; margin: 0 0 14px; }
+  .hero h1 { font: 700 clamp(32px, 5vw, 52px)/1.05 'Bricolage Grotesque', Inter, sans-serif; letter-spacing: -.02em; margin: 0 0 14px; }
+  .hero .lede { font-size: 17px; color: #4a4a4a; max-width: 620px; margin: 0 0 22px; }
+  .stats { display: flex; flex-wrap: wrap; gap: 10px 28px; align-items: center; font-size: 14px; color: var(--muted); }
+  .stats b { color: var(--ink); font: 600 22px/1 'Bricolage Grotesque', sans-serif; margin-right: 6px; }
+  .stats a { color: var(--ink); font-weight: 600; }
+  .cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; align-items: start; }
+  .col h2 { display: flex; align-items: baseline; gap: 8px; font: 600 20px/1.2 'Bricolage Grotesque', sans-serif; margin: 0 0 14px; }
+  .col h2 small { font: 500 13px/1 Inter, sans-serif; color: var(--muted); }
+  .col ul { gap: 14px; }
+  .card { display: block; position: relative; overflow: hidden; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 22px 20px 18px; color: inherit; text-decoration: none; transition: transform .15s, box-shadow .15s, border-color .15s; }
+  .card::before { content: ''; position: absolute; inset: 0 0 auto; height: 4px; background: var(--g, #e8604c); }
+  .card:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(37,37,37,.08); border-color: #d6d3cb; }
+  .card .t { font: 600 21px/1.2 'Bricolage Grotesque', sans-serif; margin-bottom: 6px; }
+  .card .m { margin-top: 10px; }
+  .card .go { display: block; margin-top: 14px; font-size: 14px; font-weight: 600; }
+  .col.g1 { --g: #e8604c; } .col.g2 { --g: #3b6fd8; } .col.g3 { --g: #8a5cd8; }
+  .empty { border: 1px dashed #cfccc4; border-radius: 8px; padding: 22px 20px; font-size: 14px; color: var(--muted); background: rgba(255,255,255,.5); }
+  .st { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+  .st i { width: 8px; height: 8px; border-radius: 50%; background: #b5b2aa; flex: none; }
+  .st.ok { color: #23774a; } .st.ok i { background: #2e9d5b; } .st.open { color: #b8432f; } .st.open i { background: #e8604c; } .st.done i { background: #3b6fd8; }
+  .how { margin-top: 44px; font-size: 14px; color: var(--muted); }
+  @media (max-width: 880px) { .cols { grid-template-columns: 1fr; } .box.wide { padding: 36px 16px 56px; } }
   .foot { margin-top: 18px; font-size: 13px; color: var(--muted); }
   .foot a { color: inherit; }
   [hidden] { display: none !important; }
@@ -79,7 +102,7 @@
   async function start(key) {
     if (MODE === 'index') {
       $('list').innerHTML = new TextDecoder().decode(await open(key, await fetchBin('list.bin')));
-      $('box').classList.add('wide');
+      $('box').classList.add('wide'); $('h').hidden = true; document.body.classList.add('index');
       show('list');
       return;
     }

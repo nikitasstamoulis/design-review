@@ -46,7 +46,7 @@
 </div>
 <script>
 (() => {
-  const MODE = 'index', ROOT = './', SALT = 'y+NECgCLbD5a/8VyZ9lY0w==', ITER = 600000, STORE = 'colossyan-review-key';
+  const MODE = 'index', ROOT = './', SALT = 'y+NECgCLbD5a/8VyZ9lY0w==', ITER = 600000, STORE = 'review-key';
   const $ = id => document.getElementById(id);
   const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
   const show = id => ['login', 'load', 'list'].forEach(x => { $(x).hidden = x !== id; });

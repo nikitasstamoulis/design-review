@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Review</title>
+<style>
+  :root { --bg: #f6f5f2; --card: #fff; --ink: #252525; --muted: #6b6b6b; --line: #e4e2dc; --accent: #252525; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--ink);
+    font: 16px/1.5 Inter, system-ui, -apple-system, sans-serif; padding: 16px; }
+  .box { width: 100%; max-width: 440px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 32px; }
+  .box.wide { max-width: 640px; }
+  h1 { font-size: 22px; line-height: 1.25; margin: 0 0 6px; }
+  p { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
+  form { display: flex; gap: 8px; }
+  input { flex: 1; min-width: 0; font: inherit; padding: 12px 14px; border: 1px solid var(--line); border-radius: 6px; }
+  button { font: inherit; font-weight: 600; padding: 12px 18px; border: 0; border-radius: 6px; background: var(--accent); color: #fff; cursor: pointer; }
+  .err { color: #b3261e; font-size: 14px; margin-top: 10px; min-height: 1.5em; }
+  .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  li a { display: block; padding: 16px 18px; border: 1px solid var(--line); border-radius: 6px; color: inherit; text-decoration: none; }
+  li a:hover { border-color: var(--ink); }
+  .t { display: block; font-weight: 600; }
+  .m { display: block; font-size: 13px; color: var(--muted); }
+  .foot { margin-top: 18px; font-size: 13px; color: var(--muted); }
+  .foot a { color: inherit; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="box" id="box">
+  <h1 id="h">Colossyan pages for review</h1>
+  <div id="login" hidden>
+    <p>Enter the review password to continue.</p>
+    <form id="f"><input id="pw" type="password" autocomplete="current-password" placeholder="Password" autofocus><button>Open</button></form>
+    <div class="err" id="err"></div>
+  </div>
+  <div id="load" hidden>
+    <p id="status">Unlocking…</p>
+    <div class="bar"><i id="prog"></i></div>
+  </div>
+  <div id="list" hidden></div>
+</div>
+<script>
+(() => {
+  const MODE = 'index', ROOT = './', SALT = 'y+NECgCLbD5a/8VyZ9lY0w==', ITER = 600000, STORE = 'colossyan-review-key';
+  const $ = id => document.getElementById(id);
+  const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  const show = id => ['login', 'load', 'list'].forEach(x => { $(x).hidden = x !== id; });
+
+  async function aes(raw) { return crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['decrypt']); }
+  async function derive(pw) {
+    const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits']);
+    return new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: b64(SALT), iterations: ITER, hash: 'SHA-256' }, base, 256));
+  }
+  async function open(key, buf) {
+    return crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, key, buf.slice(12));
+  }
+  async function fetchBin(url) {
+    const r = await fetch(url, { cache: 'no-cache' });
+    if (!r.ok) throw new Error(url + ' ' + r.status);
+    return new Uint8Array(await r.arrayBuffer());
+  }
+  async function tryKey(raw) {
+    const key = await aes(raw);
+    await open(key, await fetchBin(ROOT + 'check.bin')); // throws on a wrong key
+    return key;
+  }
+
+  async function start(key) {
+    if (MODE === 'index') {
+      $('list').innerHTML = new TextDecoder().decode(await open(key, await fetchBin('list.bin')));
+      $('box').classList.add('wide');
+      show('list');
+      return;
+    }
+    show('load');
+    const data = JSON.parse(new TextDecoder().decode(await open(key, await fetchBin('page.bin'))));
+    const total = data.media.reduce((a, m) => a + m.bytes, 0) || 1;
+    let done = 0;
+    const urls = {};
+    const queue = data.media.slice();
+    const tick = () => {
+      $('prog').style.width = (100 * done / total).toFixed(1) + '%';
+      $('status').textContent = `Loading images and videos… ${(done / 1e6).toFixed(0)} of ${(total / 1e6).toFixed(0)} MB`;
+    };
+    tick();
+    await Promise.all(Array.from({ length: 4 }, async () => {
+      while (queue.length) {
+        const m = queue.shift();
+        const plain = await open(key, await fetchBin(ROOT + 'm/' + m.id + '.bin'));
+        const url = URL.createObjectURL(new Blob([plain], { type: m.type }));
+        m.p.forEach(p => { urls[p] = url; });
+        done += m.bytes; tick();
+      }
+    }));
+
+    // Static references in the markup, CSS and inline scripts
+    const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const keys = Object.keys(urls).sort((a, b) => b.length - a.length);
+    let html = data.html;
+    if (keys.length) html = html.replace(new RegExp('(?<![\\w/.%-])(?:\\./)?(' + keys.map(esc).join('|') + ')', 'g'), (m, k) => urls[k]);
+
+    // Paths the page builds at runtime, e.g. 'assets/.../ep_' + presenter + '_' + lang + '.mp4'
+    const map = v => {
+      if (typeof v !== 'string') return v;
+      const k = v.replace(/^\.\//, '');
+      if (urls[k]) return urls[k];
+      try { return urls[decodeURIComponent(k)] || v; } catch (e) { return v; }
+    };
+    const wrap = (proto, prop) => {
+      const d = Object.getOwnPropertyDescriptor(proto, prop);
+      if (d && d.set) Object.defineProperty(proto, prop, { ...d, set(v) { d.set.call(this, map(v)); } });
+    };
+    wrap(HTMLMediaElement.prototype, 'src');
+    wrap(HTMLImageElement.prototype, 'src');
+    wrap(HTMLSourceElement.prototype, 'src');
+    wrap(HTMLVideoElement.prototype, 'poster');
+    const setAttr = Element.prototype.setAttribute;
+    Element.prototype.setAttribute = function (n, v) {
+      return setAttr.call(this, n, /^(src|poster|href)$/i.test(n) ? map(v) : v);
+    };
+
+    document.open();
+    document.write(html);
+    document.close();
+  }
+
+  async function boot() {
+    const saved = localStorage.getItem(STORE);
+    if (saved) {
+      try { return await start(await tryKey(b64(saved))); }
+      catch (e) { localStorage.removeItem(STORE); }
+    }
+    show('login');
+    $('f').addEventListener('submit', async ev => {
+      ev.preventDefault();
+      $('err').textContent = 'Checking…';
+      try {
+        const raw = await derive($('pw').value.trim());
+        const key = await tryKey(raw);
+        localStorage.setItem(STORE, btoa(String.fromCharCode(...raw)));
+        $('err').textContent = '';
+        await start(key);
+      } catch (e) {
+        $('err').textContent = 'That password did not work.';
+      }
+    });
+  }
+  boot().catch(e => { show('load'); $('status').textContent = 'Something went wrong: ' + e.message; });
+})();
+</script>
+</body>
+</html>

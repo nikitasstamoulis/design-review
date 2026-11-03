@@ -174,14 +174,23 @@
     wrap(HTMLImageElement.prototype, 'src');
     wrap(HTMLSourceElement.prototype, 'src');
     wrap(HTMLVideoElement.prototype, 'poster');
+    // ...and CSS set from scripts, e.g. el.style.backgroundImage = 'url("assets/.../as_' + key + '.webp")'
+    const mapCss = v => typeof v === 'string' ? v.replace(/url\((['"]?)([^'")]+)\1\)/g, (m, q, u) => { const r = map(u); return r === u ? m : `url("${r}")`; }) : v;
+    // style.backgroundImage has no prototype setter in Chrome, so catch it when it lands in the style attribute
+    const fixStyle = el => { const s = el.getAttribute && el.getAttribute('style'); if (s && s.includes('url(')) { const t = mapCss(s); if (t !== s) setAttr.call(el, 'style', t); } };
+    const styleObs = new MutationObserver(ms => ms.forEach(m => fixStyle(m.target)));
+    const setProp = CSSStyleDeclaration.prototype.setProperty;
+    CSSStyleDeclaration.prototype.setProperty = function (n, v, p) { return setProp.call(this, n, mapCss(v), p); };
     const setAttr = Element.prototype.setAttribute;
     Element.prototype.setAttribute = function (n, v) {
-      return setAttr.call(this, n, /^(src|poster|href)$/i.test(n) ? map(v) : v);
+      return setAttr.call(this, n, /^(src|poster|href)$/i.test(n) ? map(v) : /^style$/i.test(n) ? mapCss(v) : v);
     };
 
     document.open();
     document.write(html);
     document.close();
+    document.querySelectorAll('[style*="url("]').forEach(fixStyle);
+    styleObs.observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['style'] });
   }
 
   async function boot() {

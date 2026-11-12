@@ -147,6 +147,7 @@
       while (queue.length) {
         const m = queue.shift();
         const plain = await open(key, await fetchBin(ROOT + 'm/' + m.id + '.bin'));
+        if (m.p.some(x => /\.(m?js|css)$/i.test(x))) m.plain = plain; // paths inside scripts and stylesheets are rewritten below
         const url = URL.createObjectURL(new Blob([plain], { type: m.type }));
         m.p.forEach(p => { urls[p] = url; });
         done += m.bytes; tick();
@@ -156,8 +157,18 @@
     // Static references in the markup, CSS and inline scripts
     const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const keys = Object.keys(urls).sort((a, b) => b.length - a.length);
+    const pathRe = keys.length ? new RegExp('(?<![\\w/.%-])(?:\\./)?(' + keys.map(esc).join('|') + ')', 'g') : null;
+    // Scripts and stylesheets loaded as files (e.g. a demo that builds its <img> tags with innerHTML) keep relative
+    // media paths, which would 404 on this site: rewrite them to blob URLs too, then point the page at the new file.
+    data.media.forEach(m => {
+      if (!m.plain || !pathRe) return;
+      const txt = new TextDecoder().decode(m.plain), out = txt.replace(pathRe, (x, k) => urls[k]);
+      if (out === txt) return;
+      const url = URL.createObjectURL(new Blob([out], { type: m.type }));
+      m.p.forEach(p => { urls[p] = url; });
+    });
     let html = data.html;
-    if (keys.length) html = html.replace(new RegExp('(?<![\\w/.%-])(?:\\./)?(' + keys.map(esc).join('|') + ')', 'g'), (m, k) => urls[k]);
+    if (pathRe) html = html.replace(pathRe, (m, k) => urls[k]);
 
     // Paths the page builds at runtime, e.g. 'assets/.../ep_' + presenter + '_' + lang + '.mp4'
     const map = v => {
@@ -191,6 +202,13 @@
     document.close();
     document.querySelectorAll('[style*="url("]').forEach(fixStyle);
     styleObs.observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['style'] });
+    // Media tags a script inserts as markup (innerHTML) bypass the setters above: map their src/poster when they land
+    const fixMedia = el => ['src', 'poster'].forEach(a => { const v = el.getAttribute && el.getAttribute(a); if (v && !/^(blob|data|https?):/.test(v)) { const r = map(v); if (r !== v) setAttr.call(el, a, r); } });
+    new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => {
+      if (n.nodeType !== 1) return;
+      if (/^(IMG|VIDEO|SOURCE|AUDIO)$/.test(n.tagName)) fixMedia(n);
+      n.querySelectorAll && n.querySelectorAll('img,video,source,audio').forEach(fixMedia);
+    }))).observe(document.documentElement, { subtree: true, childList: true });
   }
 
   async function boot() {
